@@ -44,7 +44,8 @@ const theme = createTheme({
   }
 });
 
-const api = axios.create({ baseURL: 'http://localhost:5000' });
+// --- CONEXIÓN CON EL BACKEND EN LA NUBE (RENDER) ---
+const api = axios.create({ baseURL: 'https://eventbite-api.onrender.com' });
 
 function App() {
   const [nombreEvento, setNombreEvento] = useState("Cargando...");
@@ -200,8 +201,7 @@ function App() {
                   </Button>
                 </form>
 
-                {/* --- SECCIÓN DE REINICIO (SUBIDA Y COMPACTA) --- */}
-                {/* mt: 2 reduce la distancia, pt: 2 ajusta el relleno interno */}
+                {/* --- SECCIÓN DE REINICIO --- */}
                 <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed #CFD8DC', textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                     ¿Necesitas empezar de nuevo?
