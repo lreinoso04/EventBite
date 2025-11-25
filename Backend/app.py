@@ -16,18 +16,18 @@ swagger = Swagger(app)
 
 # --- MODELOS ---
 
-# 1. Configuración del Evento (Para guardar el nombre)
 class Evento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(200), default="Mi Evento Especial")
+    # NUEVO: Campo para la fecha
+    fecha = db.Column(db.String(20), default="") 
 
-# 2. Las Metas (El Menú)
 class Meta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     objetivo = db.Column(db.Integer, nullable=False)
+    categoria = db.Column(db.String(50), default="General")
 
-# 3. Los Aportes (Quién trae qué)
 class Aporte(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     meta_id = db.Column(db.Integer, db.ForeignKey('meta.id'), nullable=False)
@@ -37,50 +37,65 @@ class Aporte(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Crear configuración por defecto si no existe
     if not Evento.query.first():
         db.session.add(Evento(nombre="Nombre del Evento"))
         db.session.commit()
 
-# --- RUTAS DE CONTROL (RESET Y NOMBRE) ---
+# --- RUTAS DE CONTROL ---
 
-@app.route('/config', methods=['GET'])
-def get_config():
+@app.route('/config', methods=['GET', 'PUT'])
+def manage_config():
     evt = Evento.query.first()
-    return jsonify({"nombre": evt.nombre})
-
-@app.route('/config', methods=['PUT'])
-def update_config():
-    data = request.json
-    evt = Evento.query.first()
-    evt.nombre = data.get('nombre', evt.nombre)
-    db.session.commit()
-    return jsonify({"nombre": evt.nombre})
+    
+    if request.method == 'PUT':
+        data = request.json
+        # Actualizamos nombre y fecha si vienen en los datos
+        evt.nombre = data.get('nombre', evt.nombre)
+        evt.fecha = data.get('fecha', evt.fecha)
+        db.session.commit()
+        
+    return jsonify({
+        "nombre": evt.nombre, 
+        "fecha": evt.fecha
+    })
 
 @app.route('/reset', methods=['DELETE'])
 def reset_all():
-    """Borra todos los datos para empezar de cero"""
     try:
         db.session.query(Aporte).delete()
         db.session.query(Meta).delete()
-        # Reiniciamos el nombre por defecto
         evt = Evento.query.first()
         evt.nombre = "Nuevo Evento"
+        evt.fecha = "" # Resetear fecha
         db.session.commit()
         return jsonify({"msg": "Todo reiniciado"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- RUTAS CRUD (METAS Y APORTES) ---
-# (Iguales que antes pero optimizadas)
+# --- RUTAS CRUD (Sin cambios respecto a la versión anterior) ---
 
 @app.route('/metas', methods=['GET', 'POST'])
 def manage_metas():
     if request.method == 'GET':
-        return jsonify([{"id": m.id, "nombre": m.nombre, "objetivo": m.objetivo} for m in Meta.query.all()])
+        return jsonify([{
+            "id": m.id, "nombre": m.nombre, "objetivo": m.objetivo, "categoria": m.categoria
+        } for m in Meta.query.all()])
     
     data = request.json
-    nueva = Meta(nombre=data['nombre'], objetivo=int(data['objetivo']))
+    if not data.get('nombre') or not data.get('objetivo'):
+        return jsonify({"error": "Faltan datos"}), 400
+    try:
+        objetivo_val = int(data['objetivo'])
+    except ValueError:
+        return jsonify({"error": "El objetivo debe ser un número"}), 400
+
+    if objetivo_val <= 0:
+        return jsonify({"error": "El valor debe ser positivo"}), 400
+    if objetivo_val > 1000:
+         return jsonify({"error": "El objetivo es demasiado alto (máx 1000)"}), 400
+
+    categoria_recibida = data.get('categoria', 'General')
+    nueva = Meta(nombre=data['nombre'], objetivo=objetivo_val, categoria=categoria_recibida)
     db.session.add(nueva)
     db.session.commit()
     return jsonify({"id": nueva.id}), 201
@@ -97,11 +112,11 @@ def delete_meta(id):
 def manage_aportes():
     if request.method == 'GET':
         return jsonify([{
-            "id": a.id, "meta_id": a.meta_id, "encargado": a.encargado, 
-            "cantidad": a.cantidad, "estado": a.estado
+            "id": a.id, "meta_id": a.meta_id, "encargado": a.encargado, "cantidad": a.cantidad, "estado": a.estado
         } for a in Aporte.query.all()])
-    
     data = request.json
+    if int(data['cantidad']) <= 0:
+        return jsonify({"error": "La cantidad debe ser positiva"}), 400
     nuevo = Aporte(meta_id=data['meta_id'], encargado=data['encargado'], cantidad=int(data['cantidad']))
     db.session.add(nuevo)
     db.session.commit()
@@ -114,10 +129,12 @@ def modify_aporte(id):
         db.session.delete(aporte)
         db.session.commit()
         return jsonify({"msg": "Deleted"})
-    
     data = request.json
     if 'estado' in data: aporte.estado = data['estado']
-    if 'cantidad' in data: aporte.cantidad = int(data['cantidad'])
+    if 'cantidad' in data: 
+        if int(data['cantidad']) <= 0:
+             return jsonify({"error": "La cantidad debe ser positiva"}), 400
+        aporte.cantidad = int(data['cantidad'])
     if 'encargado' in data: aporte.encargado = data['encargado']
     db.session.commit()
     return jsonify({"msg": "Updated"})
