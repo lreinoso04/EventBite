@@ -1,97 +1,119 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Confetti from 'react-confetti';
-import { Toaster, toast } from 'react-hot-toast';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { 
   Container, Typography, Box, TextField, Button, 
-  Card, CardContent, IconButton, Checkbox, Grid,
+  Card, CardContent, IconButton, Checkbox, Grid, 
   Paper, LinearProgress, Dialog, DialogTitle, DialogContent, DialogActions, 
-  Chip, Fade, Tooltip, MenuItem, Select, FormControl, InputLabel, InputAdornment
+  Chip, Fade, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, InputAdornment, DialogContentText
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+
+// --- ICONOS ---
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import LunchDiningIcon from '@mui/icons-material/LunchDining'; 
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import LunchDiningIcon from '@mui/icons-material/LunchDining';
 import EditIcon from '@mui/icons-material/Edit';
-import LocalBarIcon from '@mui/icons-material/LocalBar';
-import CakeIcon from '@mui/icons-material/Cake';
-import LocalPizzaIcon from '@mui/icons-material/LocalPizza';
-import CelebrationIcon from '@mui/icons-material/Celebration';
-import ShareIcon from '@mui/icons-material/Share'; // NUEVO
-import SearchIcon from '@mui/icons-material/Search'; // NUEVO
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'; // NUEVO
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import SearchIcon from '@mui/icons-material/Search';
+import ShareIcon from '@mui/icons-material/Share';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import LockIcon from '@mui/icons-material/Lock';
+import SecurityIcon from '@mui/icons-material/Security';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Nuevo Icono para Copiar
 
-// --- TEMA ---
-const theme = createTheme({
-  typography: {
-    fontFamily: '"Poppins", "Helvetica", "Arial", sans-serif',
-    h4: { fontWeight: 600, letterSpacing: '-0.5px' },
-    button: { textTransform: 'none', fontWeight: 600 }
-  },
-  palette: {
-    primary: { main: '#455A64' },
-    secondary: { main: '#D4AC0D' },
-    error: { main: '#E57373' },
-    background: { default: '#F2F4F6' },
-    text: { primary: '#263238', secondary: '#546E7A' }
-  },
-  shape: { borderRadius: 16 },
-});
+const api = axios.create({ baseURL: 'http://localhost:5000' });
 
-// URL DEL BACKEND (Recuerda cambiar a Render cuando subas)
-const api = axios.create({ baseURL: 'http://localhost:5000' }); 
-
-const categorias = [
-  { nombre: "Comida", icono: <LocalPizzaIcon fontSize="small" /> },
-  { nombre: "Bebidas", icono: <LocalBarIcon fontSize="small" /> },
-  { nombre: "Postres", icono: <CakeIcon fontSize="small" /> },
-  { nombre: "Desechables", icono: <LunchDiningIcon fontSize="small" /> },
-  { nombre: "Decoración", icono: <CelebrationIcon fontSize="small" /> },
-  { nombre: "Otros", icono: <EmojiEventsIcon fontSize="small" /> }
-];
+const PIN_SEGURIDAD = "1234";
+const COLORES_GRAFICO = ['#00C49F', '#FF8042'];
 
 function App() {
+  // --- TEMA ---
+  const [modoOscuro, setModoOscuro] = useState(() => localStorage.getItem('tema') === 'dark');
+
+  const theme = React.useMemo(() => createTheme({
+    palette: {
+      mode: modoOscuro ? 'dark' : 'light',
+      primary: { main: modoOscuro ? '#90CAF9' : '#455A64' },
+      secondary: { main: '#D4AC0D' },
+      background: { default: modoOscuro ? '#121212' : '#F2F4F6', paper: modoOscuro ? '#1E1E1E' : '#ffffff' },
+    },
+    typography: { fontFamily: '"Poppins", sans-serif', button: { textTransform: 'none', fontWeight: 600 } },
+    shape: { borderRadius: 16 },
+    components: {
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: { borderRadius: 16, backgroundColor: modoOscuro ? 'rgba(255, 255, 255, 0.05)' : '#FAFAFA' }
+        }
+      }
+    }
+  }), [modoOscuro]);
+
+  const toggleTema = () => {
+    setModoOscuro((prev) => {
+      localStorage.setItem('tema', !prev ? 'dark' : 'light');
+      return !prev;
+    });
+  };
+
+  // --- ESTADOS ---
   const [nombreEvento, setNombreEvento] = useState("Cargando...");
-  const [fechaEvento, setFechaEvento] = useState(""); // NUEVO: Estado Fecha
-  const [editandoConfig, setEditandoConfig] = useState(false); // Cambiado nombre para incluir fecha
+  const [fechaEvento, setFechaEvento] = useState("");
+  const [editandoConfig, setEditandoConfig] = useState(false);
   
   const [metas, setMetas] = useState([]);
   const [aportes, setAportes] = useState([]);
-  const [busqueda, setBusqueda] = useState(""); // NUEVO: Estado Búsqueda
   
-  const [nuevaMeta, setNuevaMeta] = useState({ nombre: '', objetivo: '', categoria: 'Comida' });
-  
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("Todas");
+
+  const [nuevaMeta, setNuevaMeta] = useState({ nombre: '', objetivo: '', categoria: 'Comida', prioridad: 'Normal' });
   const [modalAbierto, setModalAbierto] = useState(false);
   const [metaSeleccionada, setMetaSeleccionada] = useState(null);
   const [nuevoAporte, setNuevoAporte] = useState({ encargado: '', cantidad: '' });
   const [aporteEditandoId, setAporteEditandoId] = useState(null);
-  const [mostrarConfeti, setMostrarConfeti] = useState(false);
+  
+  const [modalSeguridad, setModalSeguridad] = useState(false);
+  const [pinIngresado, setPinIngresado] = useState("");
+  const [accionPendiente, setAccionPendiente] = useState(null); 
 
-  useEffect(() => { recargarDatos(); }, []);
+  const [mostrarConfeti, setMostrarConfeti] = useState(false);
+  const [toast, setToast] = useState({ open: false, msg: '', type: 'info' }); 
+
+  // --- CARGA DE DATOS ---
+  useEffect(() => { 
+    recargarDatos(); 
+    const intervalo = setInterval(() => {
+        if (!editandoConfig && !modalSeguridad) { 
+            recargarDatos();
+        }
+    }, 10000);
+    return () => clearInterval(intervalo);
+  }, [editandoConfig, modalSeguridad]);
 
   const recargarDatos = async () => {
     try {
-      const resConfig = await api.get('/config');
-      const resMetas = await api.get('/metas');
-      const resAportes = await api.get('/aportes');
+      const [resConf, resMetas, resAp] = await Promise.all([
+        api.get('/config'), api.get('/metas'), api.get('/aportes')
+      ]);
       
-      setNombreEvento(resConfig.data.nombre);
-      setFechaEvento(resConfig.data.fecha || ""); // Cargar fecha
-      
+      if (!editandoConfig) {
+          setNombreEvento(resConf.data.nombre);
+          setFechaEvento(resConf.data.fecha || "");
+      }
       setMetas(resMetas.data);
-      setAportes(resAportes.data);
-      verificarCompletados(resMetas.data, resAportes.data);
-    } catch (error) { console.error("Error", error); }
+      setAportes(resAp.data);
+      verificarCompletados(resMetas.data, resAp.data);
+    } catch (error) { console.error("Error conexión", error); }
   };
 
-  // Lógica de Búsqueda (Filtro)
-  const metasFiltradas = metas.filter(meta => 
-    meta.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    meta.categoria.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const mostrarToast = (msg, type = 'success') => setToast({ open: true, msg, type });
+  const cerrarToast = () => setToast({ ...toast, open: false });
 
   const verificarCompletados = (misMetas, misAportes) => {
     let hayCelebracion = false;
@@ -102,227 +124,315 @@ function App() {
     if (hayCelebracion) setMostrarConfeti(true);
   };
 
-  const guardarConfiguracion = async () => {
-    await api.put('/config', { nombre: nombreEvento, fecha: fechaEvento });
-    setEditandoConfig(false);
-    toast.success("Evento actualizado");
+  // --- NUEVA FUNCIONALIDAD: REPORTING ---
+  const copiarListaWhatsApp = () => {
+    let pendientes = [];
+    let listos = [];
+
+    metas.forEach(m => {
+        const total = aportes.filter(a => a.meta_id === m.id).reduce((s, a) => s + a.cantidad, 0);
+        if (total >= m.objetivo) {
+            listos.push(m.nombre);
+        } else {
+            pendientes.push({ nombre: m.nombre, falta: m.objetivo - total });
+        }
+    });
+
+    let reporte = `📋 *REPORTE: ${nombreEvento}* \n📅 ${fechaEvento}\n\n`;
+    
+    if (pendientes.length > 0) {
+        reporte += `🔴 *FALTA COMPRAR:*\n`;
+        pendientes.forEach(p => reporte += `❌ ${p.nombre} (Faltan ${p.falta})\n`);
+        reporte += `\n`;
+    }
+
+    if (listos.length > 0) {
+        reporte += `🟢 *YA TENEMOS:*\n`;
+        listos.forEach(l => reporte += `✅ ${l}\n`);
+    }
+
+    reporte += `\n🔗 Entra aquí: ${window.location.href}`;
+
+    navigator.clipboard.writeText(reporte);
+    mostrarToast("📋 ¡Lista copiada! Pégala en WhatsApp", "info");
   };
 
-  // NUEVO: Función Compartir
-  const compartirEvento = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast.success("¡Link copiado al portapapeles!", { icon: '🔗' });
+  // --- SEGURIDAD ---
+  const solicitarSeguridad = (accion) => {
+    setAccionPendiente(() => accion); 
+    setPinIngresado("");
+    setModalSeguridad(true);
+  };
+
+  const verificarPin = () => {
+    if (pinIngresado === PIN_SEGURIDAD) {
+        setModalSeguridad(false);
+        if (accionPendiente) accionPendiente(); 
+        mostrarToast("Acceso autorizado", "success");
+    } else {
+        mostrarToast("PIN Incorrecto", "error");
+        setPinIngresado("");
+    }
+  };
+
+  // --- ACCIONES ---
+  const guardarConfiguracion = async () => {
+    solicitarSeguridad(async () => {
+        await api.put('/config', { nombre: nombreEvento, fecha: fechaEvento });
+        setEditandoConfig(false);
+        mostrarToast("Evento actualizado correctamente");
+    });
   };
 
   const reiniciarTodo = async () => {
-    if (window.confirm("⚠️ ¿Reiniciar todo el evento?")) {
-      await api.delete('/reset');
-      setMostrarConfeti(false);
-      recargarDatos();
-      toast("Evento reiniciado", { icon: '🧹' });
-    }
+    solicitarSeguridad(async () => {
+        await api.delete('/reset');
+        setMostrarConfeti(false);
+        recargarDatos();
+        mostrarToast("Sistema reiniciado de fábrica", "warning");
+    });
+  };
+
+  const eliminarMeta = (id) => {
+    solicitarSeguridad(async () => {
+        await api.delete(`/metas/${id}`);
+        recargarDatos();
+        mostrarToast("Meta eliminada", "warning");
+    });
+  };
+
+  const eliminarAporte = (id) => {
+    solicitarSeguridad(async () => {
+        await api.delete(`/aportes/${id}`);
+        recargarDatos();
+        mostrarToast("Aporte eliminado", "warning");
+    });
   };
 
   const crearMeta = async (e) => {
     e.preventDefault();
-    if (!nuevaMeta.nombre || !nuevaMeta.objetivo) {
-        toast.error("Faltan datos por llenar");
-        return;
-    }
+    if (!nuevaMeta.nombre || !nuevaMeta.objetivo) return mostrarToast("Faltan datos", "error");
+    if (nuevaMeta.objetivo <= 0) return mostrarToast("El objetivo debe ser positivo", "error");
     try {
       await api.post('/metas', nuevaMeta);
-      toast.success("Misión agregada");
-      setNuevaMeta({ nombre: '', objetivo: '', categoria: 'Comida' });
+      setNuevaMeta({ nombre: '', objetivo: '', categoria: 'Comida', prioridad: 'Normal' });
       recargarDatos();
-    } catch (error) {
-      if (error.response && error.response.data.error) toast.error(error.response.data.error);
-      else toast.error("Error de conexión");
-    }
+      mostrarToast("Misión agregada", "success");
+    } catch (err) { mostrarToast(err.response?.data?.error || "Error", "error"); }
   };
 
-  const eliminarMeta = async (id) => {
-      await api.delete(`/metas/${id}`);
-      recargarDatos();
-      toast.success("Eliminado");
-  };
-  
   const guardarAporte = async () => {
-    if (!nuevoAporte.encargado || !nuevoAporte.cantidad) {
-        toast.error("Llena todos los campos");
-        return;
-    }
+    if (!nuevoAporte.encargado || !nuevoAporte.cantidad) return;
+    if (nuevoAporte.cantidad <= 0) return mostrarToast("Cantidad inválida", "error");
+    const payload = { ...nuevoAporte, meta_id: metaSeleccionada?.id };
     try {
-        const payload = { ...nuevoAporte, meta_id: metaSeleccionada?.id };
-        if (aporteEditandoId) await api.put(`/aportes/${aporteEditandoId}`, payload);
-        else await api.post('/aportes', payload);
-        
-        setModalAbierto(false);
-        recargarDatos();
-        toast.success(aporteEditandoId ? "Aporte actualizado" : "¡Gracias por aportar!");
-    } catch (error) {
-        if (error.response && error.response.data.error) toast.error(error.response.data.error);
-    }
+      if (aporteEditandoId) await api.put(`/aportes/${aporteEditandoId}`, payload);
+      else await api.post('/aportes', payload);
+      setModalAbierto(false);
+      recargarDatos();
+      mostrarToast("Aporte registrado", "success");
+    } catch (err) { mostrarToast("Error al guardar", "error"); }
   };
 
-  const eliminarAporte = async (id) => await api.delete(`/aportes/${id}`).then(recargarDatos);
-  const toggleEstadoAporte = async (a) => await api.put(`/aportes/${a.id}`, { estado: !a.estado }).then(recargarDatos);
-
-  const abrirModalAporte = (meta, aporte = null) => {
-    setMetaSeleccionada(meta);
-    if (aporte) {
-      setAporteEditandoId(aporte.id);
-      setNuevoAporte({ encargado: aporte.encargado, cantidad: aporte.cantidad });
-    } else {
-      setAporteEditandoId(null);
-      setNuevoAporte({ encargado: '', cantidad: '' });
-    }
-    setModalAbierto(true);
+  const compartirWhatsApp = () => {
+    const texto = `Hola! Te invito a colaborar en el evento *${nombreEvento}* 📅 ${fechaEvento}. Faltan cosas por llevar.`;
+    const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+    window.open(url, '_blank');
   };
+
+  // --- DATOS VISUALES ---
+  const metasCompletas = metas.filter(m => {
+    const totalAportado = aportes.filter(a => a.meta_id === m.id).reduce((sum, a) => sum + a.cantidad, 0);
+    return totalAportado >= m.objetivo;
+  }).length;
+  const metasPendientes = metas.length - metasCompletas;
+  const dataGrafico = [{ name: 'Completado', value: metasCompletas }, { name: 'Pendiente', value: metasPendientes }];
 
   const getProgreso = (metaId, objetivo) => {
     const lista = aportes.filter(a => a.meta_id === metaId);
     const total = lista.reduce((s, a) => s + a.cantidad, 0);
-    return { total, porcentaje: Math.min((total/objetivo)*100, 100), completo: total >= objetivo, lista };
+    return { total, porcentaje: Math.min((total / objetivo) * 100, 100), completo: total >= objetivo, lista };
+  };
+
+  const metasFiltradas = metas.filter(m => {
+    const coincideTexto = m.nombre.toLowerCase().includes(busqueda.toLowerCase());
+    const coincideCat = filtroCategoria === "Todas" || m.categoria === filtroCategoria;
+    return coincideTexto && coincideCat;
+  });
+
+  const getColorPrioridad = (p) => {
+    if (p === 'Urgente') return '#ff1744'; 
+    if (p === 'Opcional') return '#00e676'; 
+    return '#2979ff'; 
   };
 
   return (
     <ThemeProvider theme={theme}>
-      <Toaster position="top-center" reverseOrder={false} />
       {mostrarConfeti && <Confetti numberOfPieces={200} recycle={false} />}
       
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 8 }}>
         
-        {/* HEADER ACTUALIZADO */}
-        <Paper elevation={0} sx={{ bgcolor: 'white', pt: 4, pb: 4, mb: 5, borderBottom: '1px solid #E0E0E0', borderRadius: '0 0 30px 30px' }}>
-          <Container maxWidth="lg">
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-                
-                {/* Título e Info del Evento */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box sx={{ bgcolor: '#F5F7F8', p: 1.5, borderRadius: '50%', color: 'secondary.main' }}><LunchDiningIcon sx={{ fontSize: 40 }} /></Box>
-                    <Box>
-                        <Typography variant="overline" color="text.secondary" fontWeight="bold" letterSpacing={2}>EventBite - GESTIÓN DE EVENTOS</Typography>
-                        
-                        {editandoConfig ? (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-                            <TextField variant="standard" label="Nombre Evento" value={nombreEvento} onChange={(e) => setNombreEvento(e.target.value)} autoFocus />
-                            <TextField type="date" variant="standard" value={fechaEvento} onChange={(e) => setFechaEvento(e.target.value)} />
-                            <Button size="small" variant="contained" onClick={guardarConfiguracion}>Guardar Cambios</Button>
-                        </Box>
-                        ) : (
-                        <Box>
-                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }} onClick={() => setEditandoConfig(true)}>
-                                <Typography variant="h4" color="primary.main">{nombreEvento}</Typography>
-                                <Tooltip title="Editar info"><EditIcon sx={{ fontSize: 18, color: '#CFD8DC' }} /></Tooltip>
-                            </Box>
-                            {fechaEvento && (
-                                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                    <CalendarMonthIcon fontSize="small"/> {fechaEvento}
-                                </Typography>
-                            )}
-                        </Box>
-                        )}
+        {/* HEADER */}
+        <Paper elevation={0} sx={{ bgcolor: 'background.paper', pt: 4, pb: 4, mb: 4, borderRadius: '0 0 30px 30px' }}>
+          <Container maxWidth="lg" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ bgcolor: 'primary.light', p: 1.5, borderRadius: '50%', color: 'white' }}><LunchDiningIcon fontSize="large" /></Box>
+              <Box>
+                {editandoConfig ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <TextField value={nombreEvento} onChange={(e) => setNombreEvento(e.target.value)} variant="standard" placeholder="Nombre" autoFocus />
+                    <TextField type="date" value={fechaEvento} onChange={(e) => setFechaEvento(e.target.value)} variant="standard" />
+                    <Button size="small" onClick={guardarConfiguracion} variant="contained" startIcon={<LockIcon />}>Guardar (PIN)</Button>
+                  </Box>
+                ) : (
+                  <Box onClick={() => setEditandoConfig(true)} sx={{ cursor: 'pointer' }}>
+                    <Typography variant="h4" color="primary" fontWeight="bold">{nombreEvento} <EditIcon fontSize="small" sx={{ opacity: 0.5 }} /></Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CalendarMonthIcon fontSize="small" color="action" />
+                      <Typography variant="body2" color="text.secondary">{fechaEvento || "Sin fecha"}</Typography>
                     </Box>
-                </Box>
-
-                {/* Botones de Acción Header */}
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Button variant="outlined" startIcon={<ShareIcon />} onClick={compartirEvento}>Compartir</Button>
-                    <Chip label={`${metas.length} Metas`} sx={{ bgcolor: '#ECEFF1', fontWeight: 600 }} />
-                </Box>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <IconButton onClick={toggleTema}>{modoOscuro ? <LightModeIcon /> : <DarkModeIcon />}</IconButton>
+              {/* BOTONES DE ACCIÓN */}
+              <Button startIcon={<ContentCopyIcon />} variant="contained" color="secondary" onClick={copiarListaWhatsApp} sx={{ color: 'white' }}>Lista</Button>
+              <Button startIcon={<ShareIcon />} variant="outlined" onClick={compartirWhatsApp}>Invitar</Button>
             </Box>
           </Container>
         </Paper>
 
         <Container maxWidth="lg">
           <Grid container spacing={4}>
-            {/* IZQUIERDA: FORMULARIO */}
+            
+            {/* PANEL IZQUIERDO */}
             <Grid item xs={12} md={4}>
-              <Paper sx={{ p: 3, position: 'sticky', top: 20, border: '1px solid white' }}>
-                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><AddCircleOutlineIcon color="primary" />Crear Misión</Typography>
+              <Paper sx={{ p: 3, position: 'sticky', top: 20, mb: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AddCircleOutlineIcon color="primary" /> Nueva Meta
+                </Typography>
                 <form onSubmit={crearMeta}>
-                  <TextField fullWidth label="Item (ej: Refrescos)" variant="outlined" size="small" margin="dense" value={nuevaMeta.nombre} onChange={(e) => setNuevaMeta({...nuevaMeta, nombre: e.target.value})} sx={{ bgcolor: '#FAFAFA' }} />
-                  <Grid container spacing={1}>
+                  <TextField fullWidth label="¿Qué hace falta?" value={nuevaMeta.nombre} onChange={(e) => setNuevaMeta({...nuevaMeta, nombre: e.target.value})} margin="dense" size="small" />
+                  <TextField fullWidth type="number" label="Cantidad" value={nuevaMeta.objetivo} onChange={(e) => setNuevaMeta({...nuevaMeta, objetivo: e.target.value})} margin="dense" size="small" />
+                  
+                  <Grid container spacing={1} sx={{ mt: 1 }}>
                     <Grid item xs={6}>
-                        <TextField fullWidth label="Cantidad" type="number" variant="outlined" size="small" margin="dense" value={nuevaMeta.objetivo} onChange={(e) => setNuevaMeta({...nuevaMeta, objetivo: e.target.value})} sx={{ bgcolor: '#FAFAFA' }} />
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Categoría</InputLabel>
+                        <Select value={nuevaMeta.categoria} label="Categoría" onChange={(e) => setNuevaMeta({...nuevaMeta, categoria: e.target.value})}>
+                          <MenuItem value="Comida">Comida</MenuItem>
+                          <MenuItem value="Bebidas">Bebidas</MenuItem>
+                          <MenuItem value="Decoración">Decoración</MenuItem>
+                          <MenuItem value="Utensilios">Utensilios</MenuItem>
+                        </Select>
+                      </FormControl>
                     </Grid>
                     <Grid item xs={6}>
-                        <FormControl fullWidth size="small" margin="dense">
-                            <InputLabel>Categoría</InputLabel>
-                            <Select value={nuevaMeta.categoria} label="Categoría" onChange={(e) => setNuevaMeta({...nuevaMeta, categoria: e.target.value})}>
-                                {categorias.map((cat) => ( <MenuItem key={cat.nombre} value={cat.nombre}>{cat.nombre}</MenuItem> ))}
-                            </Select>
-                        </FormControl>
+                       <FormControl fullWidth size="small">
+                        <InputLabel>Prioridad</InputLabel>
+                        <Select value={nuevaMeta.prioridad} label="Prioridad" onChange={(e) => setNuevaMeta({...nuevaMeta, prioridad: e.target.value})}>
+                          <MenuItem value="Urgente">Urgente</MenuItem>
+                          <MenuItem value="Normal">Normal</MenuItem>
+                          <MenuItem value="Opcional">Opcional</MenuItem>
+                        </Select>
+                      </FormControl>
                     </Grid>
                   </Grid>
-                  <Button fullWidth variant="contained" color="primary" type="submit" sx={{ mt: 2 }}>Agregar a la Lista</Button>
+
+                  <Button fullWidth variant="contained" type="submit" sx={{ mt: 2 }}>Agregar</Button>
                 </form>
-                <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed #CFD8DC', textAlign: 'center' }}>
-                  <Button fullWidth variant="outlined" color="error" startIcon={<RestartAltIcon />} onClick={reiniciarTodo} sx={{ borderColor: '#FFCDD2', color: '#E57373' }}>Reiniciar Todo</Button>
+                
+                <Box sx={{ mt: 4, pt: 2, borderTop: '1px dashed #ccc', textAlign: 'center' }}>
+                    <Button color="error" size="small" startIcon={<SecurityIcon />} onClick={reiniciarTodo}>Resetear Evento (PIN)</Button>
                 </Box>
               </Paper>
             </Grid>
 
-            {/* DERECHA: LISTA CON BUSCADOR */}
+            {/* PANEL DERECHO */}
             <Grid item xs={12} md={8}>
-                {/* BARRA DE BÚSQUEDA */}
+              
+              {metas.length > 0 && (
+                  <Paper sx={{ p: 2, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                      <Typography variant="subtitle2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><BarChartIcon fontSize="small"/> Progreso del Evento</Typography>
+                      <Box sx={{ width: '100%', height: 200 }}>
+                        <ResponsiveContainer>
+                            <PieChart>
+                                <Pie data={dataGrafico} cx="50%" cy="50%" innerRadius={40} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value" label>
+                                    {dataGrafico.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORES_GRAFICO[index % COLORES_GRAFICO.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                                <Legend verticalAlign="middle" align="right" layout="vertical" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                      </Box>
+                  </Paper>
+              )}
+
+              <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
                 <TextField 
-                    fullWidth 
-                    placeholder="Buscar empanadas, bebidas..." 
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                    sx={{ mb: 3, bgcolor: 'white', borderRadius: 1 }}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon color="action" />
-                            </InputAdornment>
-                        ),
-                    }}
+                  fullWidth placeholder="Buscar..." size="small" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+                  sx={{ bgcolor: 'background.paper', borderRadius: 2 }}
                 />
+                <FormControl size="small" sx={{ minWidth: 120, bgcolor: 'background.paper', borderRadius: 2 }}>
+                  <Select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} displayEmpty>
+                    <MenuItem value="Todas">Todas</MenuItem>
+                    <MenuItem value="Comida">Comida</MenuItem>
+                    <MenuItem value="Bebidas">Bebidas</MenuItem>
+                    <MenuItem value="Decoración">Decoración</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
 
               {metasFiltradas.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 10, opacity: 0.6 }}>
-                    <LunchDiningIcon sx={{ fontSize: 60, color: '#CFD8DC', mb: 2 }} />
-                    <Typography variant="h6" color="text.secondary">
-                        {busqueda ? "No se encontraron resultados" : "Tu lista está vacía"}
-                    </Typography>
-                </Box>
+                <Box textAlign="center" py={5} opacity={0.5}><FilterListIcon fontSize="large" /><Typography>No hay resultados</Typography></Box>
               ) : (
-                metasFiltradas.map((meta) => { // USAMOS METAS FILTRADAS AQUÍ
+                metasFiltradas.map((meta) => {
                   const { total, porcentaje, completo, lista } = getProgreso(meta.id, meta.objetivo);
-                  const catData = categorias.find(c => c.nombre === meta.categoria) || categorias[5];
-
                   return (
                     <Fade in={true} key={meta.id}>
-                      <Card sx={{ mb: 3, border: '1px solid transparent', transition: 'all 0.3s', '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 8px 25px rgba(0,0,0,0.08)' } }}>
-                        <Box sx={{ p: 2.5, bgcolor: completo ? '#E8F5E9' : 'white', borderBottom: '1px solid #F5F5F5' }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Chip icon={catData.icono} label={meta.categoria || "General"} size="small" sx={{ bgcolor: 'transparent', border: '1px solid #ECEFF1', color: 'text.secondary' }} />
-                                <Typography variant="h6" sx={{ color: completo ? '#2E7D32' : 'text.primary', fontWeight: 'bold' }}>{meta.nombre}</Typography> 
-                                {completo && <EmojiEventsIcon sx={{ color: '#FFD700' }} />}
-                            </Box>
+                      <Card sx={{ mb: 2, borderLeft: `5px solid ${getColorPrioridad(meta.prioridad)}` }}>
+                        <Box sx={{ p: 2, bgcolor: completo ? 'action.hover' : 'background.paper' }}>
+                          <Box display="flex" justifyContent="space-between" alignItems="center">
                             <Box>
-                              <Chip label={completo ? "COMPLETO" : `${total} / ${meta.objetivo}`} size="small" sx={{ bgcolor: completo ? '#C8E6C9' : '#ECEFF1', color: completo ? '#1B5E20' : '#546E7A', fontWeight: 'bold', mr: 1 }} />
-                              <IconButton size="small" onClick={() => eliminarMeta(meta.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                              <Typography variant="h6" sx={{ textDecoration: completo ? 'line-through' : 'none' }}>
+                                {meta.nombre}
+                              </Typography>
+                              <Box display="flex" gap={1} mt={0.5}>
+                                <Chip label={meta.categoria} size="small" variant="outlined" />
+                                <Chip label={meta.prioridad} size="small" sx={{ bgcolor: getColorPrioridad(meta.prioridad), color: 'white', fontSize: '0.7rem' }} />
+                              </Box>
+                            </Box>
+                            <Box textAlign="right">
+                               <Typography variant="h5" color={completo ? 'success.main' : 'primary'}>{total}/{meta.objetivo}</Typography>
+                               <IconButton size="small" onClick={() => eliminarMeta(meta.id)} color="error"><DeleteOutlineIcon /></IconButton>
                             </Box>
                           </Box>
-                          <LinearProgress variant="determinate" value={porcentaje} sx={{ height: 8, borderRadius: 4, bgcolor: completo ? '#C8E6C9' : '#ECEFF1', '& .MuiLinearProgress-bar': { bgcolor: completo ? '#66BB6A' : 'primary.main' } }} />
+                          <LinearProgress variant="determinate" value={porcentaje} sx={{ mt: 2, height: 8, borderRadius: 5 }} color={completo ? "success" : "primary"} />
                         </Box>
-                        <CardContent sx={{ pt: 1, pb: '16px !important' }}>
-                          {lista.map((ap) => (
-                            <Box key={ap.id} sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #FAFAFA' }}>
-                              <Checkbox checked={ap.estado} onChange={() => toggleEstadoAporte(ap)} size="small" sx={{ color: '#CFD8DC', '&.Mui-checked': { color: '#81C784' } }} />
-                              <Box sx={{ flexGrow: 1, ml: 1 }}>
-                                <Typography variant="body2" sx={{ textDecoration: ap.estado ? 'line-through' : 'none', color: ap.estado ? '#B0BEC5' : 'text.primary' }}>{ap.encargado}</Typography>
-                                <Typography variant="caption" color="text.secondary">Lleva {ap.cantidad}</Typography>
+
+                        <CardContent sx={{ bgcolor: 'background.default', py: 1 }}>
+                          {lista.map(ap => (
+                            <Box key={ap.id} display="flex" alignItems="center" justifyContent="space-between" py={0.5}>
+                              <Box display="flex" alignItems="center">
+                                <Checkbox checked={ap.estado} size="small" onChange={async () => { await api.put(`/aportes/${ap.id}`, {estado: !ap.estado}); recargarDatos(); }} />
+                                <Typography variant="body2" sx={{ textDecoration: ap.estado ? 'line-through' : 'none' }}>{ap.encargado} ({ap.cantidad})</Typography>
                               </Box>
-                              <IconButton size="small" onClick={() => abrirModalAporte(meta, ap)}><EditOutlinedIcon fontSize="small" sx={{ color: '#B0BEC5' }} /></IconButton>
-                              <IconButton size="small" onClick={() => eliminarAporte(ap.id)}><DeleteOutlineIcon fontSize="small" sx={{ color: '#FFCDD2' }} /></IconButton>
+                              <Box>
+                                <IconButton size="small" onClick={() => { setMetaSeleccionada(meta); setAporteEditandoId(ap.id); setNuevoAporte({encargado: ap.encargado, cantidad: ap.cantidad}); setModalAbierto(true); }}><EditOutlinedIcon fontSize="small" /></IconButton>
+                                <IconButton size="small" onClick={() => eliminarAporte(ap.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                              </Box>
                             </Box>
                           ))}
-                          <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={() => abrirModalAporte(meta)} sx={{ mt: 1 }}>Aportar</Button>
+                          {!completo && (
+                            <Button startIcon={<AddCircleOutlineIcon />} size="small" onClick={() => { setMetaSeleccionada(meta); setAporteEditandoId(null); setNuevoAporte({encargado:'', cantidad:''}); setModalAbierto(true); }}>
+                              Aportar
+                            </Button>
+                          )}
                         </CardContent>
                       </Card>
                     </Fade>
@@ -333,17 +443,44 @@ function App() {
           </Grid>
         </Container>
 
-        <Dialog open={modalAbierto} onClose={() => setModalAbierto(false)} PaperProps={{ sx: { borderRadius: 4, p: 1 } }}>
-          <DialogTitle sx={{ textAlign: 'center', fontWeight: 'bold', color: 'primary.main' }}>{aporteEditandoId ? 'Editar Aporte' : `Aportar a ${metaSeleccionada?.nombre}`}</DialogTitle>
+        {/* MODAL APORTAR */}
+        <Dialog open={modalAbierto} onClose={() => setModalAbierto(false)}>
+          <DialogTitle>Agregar Aporte</DialogTitle>
           <DialogContent>
-            <TextField autoFocus margin="dense" label="Tu Nombre" fullWidth variant="filled" InputProps={{ disableUnderline: true, style: { borderRadius: 10 } }} value={nuevoAporte.encargado} onChange={(e) => setNuevoAporte({...nuevoAporte, encargado: e.target.value})} sx={{ mb: 2 }} />
-            <TextField margin="dense" label="Cantidad" type="number" fullWidth variant="filled" InputProps={{ disableUnderline: true, style: { borderRadius: 10 } }} value={nuevoAporte.cantidad} onChange={(e) => setNuevoAporte({...nuevoAporte, cantidad: e.target.value})} />
+            <TextField autoFocus margin="dense" label="Nombre" fullWidth value={nuevoAporte.encargado} onChange={(e) => setNuevoAporte({...nuevoAporte, encargado: e.target.value})} />
+            <TextField margin="dense" label="Cantidad" type="number" fullWidth value={nuevoAporte.cantidad} onChange={(e) => setNuevoAporte({...nuevoAporte, cantidad: e.target.value})} />
           </DialogContent>
-          <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
-            <Button onClick={() => setModalAbierto(false)} sx={{ color: 'text.secondary' }}>Cancelar</Button>
-            <Button variant="contained" onClick={guardarAporte} sx={{ px: 4 }}>Guardar</Button>
+          <DialogActions>
+            <Button onClick={() => setModalAbierto(false)}>Cancelar</Button>
+            <Button onClick={guardarAporte} variant="contained">Guardar</Button>
           </DialogActions>
         </Dialog>
+
+        {/* MODAL PIN */}
+        <Dialog open={modalSeguridad} onClose={() => setModalSeguridad(false)}>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SecurityIcon color="error" /> Seguridad Requerida
+            </DialogTitle>
+            <DialogContent>
+                <DialogContentText>
+                    Esta es una acción destructiva o de configuración. Por favor, ingresa el PIN maestro.
+                </DialogContentText>
+                <TextField 
+                    autoFocus margin="dense" label="PIN de Seguridad" type="password" fullWidth variant="outlined" 
+                    value={pinIngresado} onChange={(e) => setPinIngresado(e.target.value)} onKeyPress={(e) => { if(e.key === 'Enter') verificarPin(); }}
+                />
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setModalSeguridad(false)}>Cancelar</Button>
+                <Button onClick={verificarPin} variant="contained" color="primary">Verificar</Button>
+            </DialogActions>
+        </Dialog>
+
+        {/* TOASTS */}
+        <Snackbar open={toast.open} autoHideDuration={4000} onClose={cerrarToast} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+          <Alert onClose={cerrarToast} severity={toast.type} sx={{ width: '100%' }}>{toast.msg}</Alert>
+        </Snackbar>
+
       </Box>
     </ThemeProvider>
   );
